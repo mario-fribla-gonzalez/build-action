@@ -1,0 +1,119 @@
+name: "Generic build action"
+description: "Github Action for building and testing applications."
+author: "Devops Mario Fribla Gonzalez"
+inputs:
+  language:
+    description: "Programming language of the application. Defaults to 'dotnet'."
+    required: true
+    options:
+      - "dotnet"
+      - "typescript"
+      # Si se quiere usar otro lenguaje, se puede agregar aquí
+  command:
+    description: "Command to execute: 'build' or 'test'. Defaults to 'build'."
+    required: true
+    options:
+      - "build"
+      - "test"
+  coberturapruebasunitarias:
+    required: true
+  
+  # Parametros para Typescript
+  node-version:
+    description: "Node.js version to use for the action. Defaults to 14.x"
+    required: false
+    options:
+      - "14.x"
+      - "16.x"
+      - "18.x"
+      - "20.x"
+      # Si se quiere usar otra version de Node.js, se puede agregar aquí
+  typescript-framework:
+    description: "Framework for the Node.js application (e.g., angular, react). Defaults to 'angular'."
+    required: false
+    options:
+      - "angular"
+      # Si se quiere usar otro framework, se puede agregar aquí
+
+  # Parametros para .NET
+  dotnet-version:
+    description: "Node.js version to use for the action. Defaults to 6.0"
+    required: false
+    options:
+      - "6.0.x"
+      - "7.0.x"
+      - "8.0.x"
+      # Si se quiere usar otra version de .NET, se puede agregar aquí
+  dotnet-selfcontained:
+    description: "Whether to build the .NET application as self-contained. Defaults to false."
+    required: false
+    type: boolean
+    default: false
+
+  # Si se quiere usar otro framework, se puede agregar los parametros aquí
+  # Ejemplo: python, java, etc.
+  # Nota: Asegurarse de que el script correspondiente exista en el directorio del action
+  #       y que exista la logica necesaria para manejar el nuevo lenguaje.
+outputs:
+  package-name:
+    description: "The name of the built .NET application."
+    value: ${{ steps.script.outputs.package-name }}
+  package-extension:
+    description: "The extension of the built package (e.g., zip)."
+    value: ${{ steps.script.outputs.package-extension }}
+  release-version:
+    description: "The version of the built .NET application."
+    value: ${{ steps.script.outputs.release-version }}
+  assets:
+    description: "The built artifacts from the .NET application."
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/setup-dotnet@v4
+      if: ${{ inputs.language == 'dotnet' }}
+      with:
+        dotnet-version: ${{ inputs.dotnet-version }}
+
+    - uses: actions/setup-node@v3
+      if: ${{ inputs.language == 'typescript' }}
+      with:
+        node-version: ${{ inputs.node-version }}
+    - uses: actions/setup-python@v5
+      if: ${{ inputs.language == 'typescript' }}
+      with:
+        python-version: '3.x'
+
+    - name: ${{ inputs.command }}
+      id: script
+      shell: powershell
+      run: |
+        # Call the script based on the language
+        if ('${{ inputs.language }}' -eq 'dotnet') {
+          & "${{ github.action_path }}/dotnet.ps1" -Command "${{ inputs.command }}" `
+                                                   -SelfContained "${{ inputs.dotnet-selfcontained }}" `
+                                                   -CoberturaPruebasUnitarias "${{ inputs.coberturapruebasunitarias }}"
+        } elseif ('${{ inputs.language }}' -eq 'typescript') {
+          & "${{ github.action_path }}/node.ps1" -Command "${{ inputs.command }}" `
+                                                 -Framework "${{ inputs.typescript-framework}}"
+        }
+
+    - uses: actions/upload-artifact@v4
+      if: ${{ inputs.command == 'build' }}
+      with:
+        path: ${{ steps.script.outputs.package-name }}.${{ steps.script.outputs.package-extension }}
+        name: assets
+        retention-days: 1
+        overwrite: true
+        if-no-files-found: error
+
+    - uses: actions/upload-artifact@v4
+      if: ${{ inputs.command == 'test' }}
+      with:
+        path: coverage
+        name: coverage-report
+        retention-days: 1
+        overwrite: true
+        include-hidden-files: true
+branding:
+  color: "green"
+  icon: "package"

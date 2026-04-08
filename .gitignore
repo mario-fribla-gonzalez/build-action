@@ -1,0 +1,6 @@
+*
+!**/
+!.gitignore
+!*.yml
+!*.ps1
+!*.md
